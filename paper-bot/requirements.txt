@@ -1,0 +1,6 @@
+# Server only. No broker, exchange or HTTP-client libraries on purpose
+# (tests/test_safety.py fails the build if one is added).
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+tzdata==2024.2

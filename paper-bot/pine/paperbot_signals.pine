@@ -1,0 +1,50 @@
+//@version=6
+// PaperBot signals: EMA crossover with an RSI filter.
+// Sends JSON alerts to the PaperBot webhook, which trades VIRTUAL money only.
+//
+// Setup (once, from TradingView on iPhone or the web):
+//   1. Paste this script in Pine Editor, save, "Add to chart".
+//   2. Open the indicator's settings and paste your WEBHOOK_SECRET into "Webhook secret".
+//   3. Create an alert: Condition = "PaperBot signals" -> "Any alert() function call",
+//      Webhook URL = https://<your-server>/webhook. Leave the message box as is.
+// Keep this script PRIVATE (never publish it): its settings hold your secret.
+
+indicator("PaperBot signals", overlay = true)
+
+secret       = input.string("", "Webhook secret", tooltip = "Same value as WEBHOOK_SECRET on the server")
+fastLen      = input.int(9, "Fast EMA", minval = 1)
+slowLen      = input.int(21, "Slow EMA", minval = 2)
+rsiLen       = input.int(14, "RSI length", minval = 2)
+rsiMaxBuy    = input.float(70.0, "Don't buy when RSI above", minval = 1, maxval = 100)
+orderUsd     = input.float(1000.0, "Order size ($)", minval = 1)
+stopPct      = input.float(2.0, "Stop loss (%)", minval = 0, maxval = 50, tooltip = "0 = no stop loss")
+sendPrices   = input.bool(true, "Send price on every bar close", tooltip = "Lets the server check your stop loss between signals")
+
+fast = ta.ema(close, fastLen)
+slow = ta.ema(close, slowLen)
+rsi  = ta.rsi(close, rsiLen)
+
+buySignal  = ta.crossover(fast, slow) and rsi < rsiMaxBuy
+sellSignal = ta.crossunder(fast, slow)
+
+plot(fast, "Fast EMA", color = color.new(color.teal, 0))
+plot(slow, "Slow EMA", color = color.new(color.orange, 0))
+plotshape(buySignal,  "Buy",  shape.triangleup,   location.belowbar, color.green, size = size.small)
+plotshape(sellSignal, "Sell", shape.triangledown, location.abovebar, color.red,   size = size.small)
+
+// One unique id per symbol + bar + action, so the server ignores repeats of the same alert.
+makeMsg(string action) =>
+    '{"secret":"' + secret + '"' +
+     ',"action":"' + action + '"' +
+     ',"symbol":"' + syminfo.ticker + '"' +
+     ',"price":' + str.tostring(close) +
+     (action == "buy" ? ',"usd":' + str.tostring(orderUsd) + ',"stop_loss_pct":' + str.tostring(stopPct) : '') +
+     ',"id":"' + syminfo.tickerid + '-' + str.tostring(time) + '-' + action + '"}'
+
+if barstate.isconfirmed and barstate.isrealtime
+    if buySignal
+        alert(makeMsg("buy"), alert.freq_once_per_bar_close)
+    else if sellSignal
+        alert(makeMsg("sell"), alert.freq_once_per_bar_close)
+    else if sendPrices
+        alert(makeMsg("price"), alert.freq_once_per_bar_close)

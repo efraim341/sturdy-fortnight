@@ -1,0 +1,21 @@
+name: paper-bot tests
+
+on:
+  push:
+    paths: ["paper-bot/**", ".github/workflows/paper-bot-tests.yml"]
+  pull_request:
+    paths: ["paper-bot/**", ".github/workflows/paper-bot-tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: paper-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
