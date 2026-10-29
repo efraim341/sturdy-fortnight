@@ -54,7 +54,7 @@ def simulator() -> Simulator:
         default_stop_loss_pct=STOP_PCT,
         max_daily_loss_usd=0.0,  # not one of the user's rules
         max_order_usd=1e12,      # the 5% rule is applied per buy below
-        allow_fractional=False,  # whole shares, like a real stock account
+        allow_fractional=True,   # fractional shares, so 5% can buy any stock
         dedup_window_seconds=1,
     )
     return Simulator(s, Store(str(DB)))
@@ -113,9 +113,9 @@ def cmd_buy(sim: Simulator, symbol: str, score: float, why: str) -> None:
     sim.process(Signal(action="price", symbol=symbol, price=price), "test")  # mark positions first
     equity = sim.state()["equity"]
     budget = equity * MAX_TRADE_PCT / 100 / (1 + sim.s.fee_rate)  # fee included in the 5%
-    qty = int(budget // price)
-    if qty < 1:
-        raise SystemExit(f"REFUSED: one share of {symbol} at ${price:,.2f} is more than 5% (${budget:,.2f})")
+    qty = int(budget / price * 1e6) / 1e6
+    if qty <= 0:
+        raise SystemExit(f"REFUSED: no budget left for {symbol} under the 5% rule")
     r = sim.process(Signal(action="buy", symbol=symbol, price=price, qty=qty, stop_loss_pct=STOP_PCT), "test")
     o = r.orders[-1]
     print(f"{r.status.upper()}: {o['action']} {o['qty']:g} {symbol} @ {price:.2f} "
