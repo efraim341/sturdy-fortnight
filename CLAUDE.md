@@ -52,7 +52,8 @@ change**, or the trades are lost when the session ends.
    (`trader-analyst`), chart/setup (`trader-entry`), and odds with the stop at -3%
    (`trader-exit` + `trader-timemachine`).
 4. Score each 1-10. Show the user **only the 8+ stocks**, each with its score and reasons in a
-   few plain lines (Hebrew).
+   few plain lines (Hebrew), and always spell out the stop: buy price and stop price
+   = buy price x 0.97 (e.g. "קנייה 100$ ← סטופ 97$").
 5. Buy every stock that scored 8+ with `account.py buy` (one position per stock), unless the
    cash is gone. Never buy under 8, never above 5%.
 6. Commit and push `paper-bot/account/`.
