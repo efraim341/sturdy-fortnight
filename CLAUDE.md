@@ -58,5 +58,20 @@ change**, or the trades are lost when the session ends.
    cash is gone. Never buy under 8, never above 5%.
 6. Commit and push `paper-bot/account/`.
 
+## Daily automatic run (scheduled task, US trading days, message ready by 16:30 Israel time)
+
+The user asked for a daily message after a full scan. Each run:
+
+1. If the NYSE is closed today (weekend or holiday), skip the scan: just run
+   `account.py check`, and send a one-line message saying the market is closed plus the account.
+2. Otherwise do the full "Each time the user asks for picks" procedure above, buy every 8+
+   stock, commit and push.
+3. End with ONE short message in Hebrew for the user's phone:
+   - each 8+ stock: name, ticker, score, 2-3 reasons, buy price, stop = price x 0.97
+     (show the calculation), and that it was bought;
+   - or, if nothing reached 8: one line saying no stock reached 8 today (no names);
+   - any stop-loss sales since the last run;
+   - the account: total value, cash, P&L, open positions with their stops.
+
 Be honest in the scores: a score is a judgment from the data, not a promise, and the user
 should hear when data was missing (a blocked source lowers confidence and the score).
