@@ -63,15 +63,18 @@ def simulator() -> Simulator:
 def quote(symbol: str) -> float:
     """Latest price from Yahoo (regular session, or the last close when the market is shut)."""
     last_err = None
-    for host in ("query1", "query2"):
+    # Yahoo rate-limits (HTTP 429) shared cloud IPs: alternate hosts and back off.
+    for attempt in range(8):
+        host = ("query1", "query2")[attempt % 2]
         url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?range=1d&interval=1m"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=15) as r:
                 meta = json.load(r)["chart"]["result"][0]["meta"]
             return float(meta["regularMarketPrice"])
-        except Exception as e:  # try the other host
+        except Exception as e:
             last_err = e
+            time.sleep(min(60, 5 * (attempt + 1)))
     raise SystemExit(f"no price for {symbol}: {last_err}")
 
 

@@ -73,5 +73,8 @@ The user asked for a daily message after a full scan. Each run:
    - any stop-loss sales since the last run;
    - the account: total value, cash, P&L, open positions with their stops.
 
+Yahoo rate-limits cloud IPs (HTTP 429). In your own scan scripts, pause ~0.5 s between
+requests and retry 429s with a growing pause (5 s, 10 s, 15 s...) instead of dropping the stock.
+
 Be honest in the scores: a score is a judgment from the data, not a promise, and the user
 should hear when data was missing (a blocked source lowers confidence and the score).
