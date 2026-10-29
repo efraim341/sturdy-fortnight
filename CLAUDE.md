@@ -14,9 +14,19 @@ user changes a rule, update this file and `paper-bot/account.py` in the same com
    1 = worst, the stock will fall. 10 = best, the stock will rise.
    **8 or more = green light: buy.** Under 8: do not buy.
 3. **No more than 5% of the account's total value per trade** (fee included).
-4. **When a held stock falls 3% (from its buy price), sell. Zero patience.**
+4. **When a held stock falls 3% (from its buy price), sell. Zero patience.** Every buy
+   gets its stop at -3% from the buy price.
+5. **Show the user only stocks that scored 8 or more.** Never list, mention or rank stocks
+   under 8. If nothing scored 8+, say so in one line (and what was checked), with no names.
 
 The user does not want a stored ranking table: compute scores fresh each time they ask.
+
+## SEC data (trader-analyst, trader-news 8-Ks)
+
+SEC requires a User-Agent with a contact email. The user allowed their account email for this,
+but this repo is **public**: never write the email into any file here. Use it only on the
+command line (`--user-agent "PaperBot <email>"`), or from `$SEC_USER_AGENT` if the user set it
+in the cloud environment's variables.
 
 ## How to run it
 
@@ -41,7 +51,8 @@ change**, or the trades are lost when the session ends.
 3. Examine the best candidates in depth: news and 8-Ks (`trader-news`), earnings and margins
    (`trader-analyst`), chart/setup (`trader-entry`), and odds with the stop at -3%
    (`trader-exit` + `trader-timemachine`).
-4. Score each 1-10 and show the user each score with its reasons in a few plain lines (Hebrew).
+4. Score each 1-10. Show the user **only the 8+ stocks**, each with its score and reasons in a
+   few plain lines (Hebrew).
 5. Buy every stock that scored 8+ with `account.py buy` (one position per stock), unless the
    cash is gone. Never buy under 8, never above 5%.
 6. Commit and push `paper-bot/account/`.
