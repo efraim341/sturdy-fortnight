@@ -46,11 +46,19 @@ change**, or the trades are lost when the session ends.
 ## Each time the user asks for picks
 
 1. `python3 account.py check` first (sell anything at -3%).
-2. Scan for candidates (`trader-scanner` daily scan; a liquid list with `--symbols` if the
-   universe download is blocked).
-3. Examine the best candidates in depth: news and 8-Ks (`trader-news`), earnings and margins
-   (`trader-analyst`), chart/setup (`trader-entry`), and odds with the stop at -3%
-   (`trader-exit` + `trader-timemachine`).
+2. Scan, from a scratch folder (the tools write `trader/` in the current folder):
+   ```bash
+   mkdir -p /tmp/scan && cd /tmp/scan
+   python3 <repo>/.claude/skills/trader-scanner/scan.py universe
+   python3 <repo>/.claude/skills/trader-scanner/scan.py daily --show 0
+   python3 <repo>/paper-bot/research.py --json research.json
+   ```
+   `research.py` ranks the bullish setups by trend, strength vs SPY, calm (for a 3% stop), a
+   one-year test of -3% stop vs +6% target, and flags headlines about upcoming earnings
+   (a hint only: verify). Both tools wait and retry when Yahoo answers 429; let them finish.
+3. Examine the top ~10 in depth: news and 8-Ks (`trader-news --tickers ...`), earnings and
+   margins (`trader-analyst`, SEC), and the earnings date. A report due within ~5 trading days
+   can gap the stock past the -3% stop: that lowers the score. A pre-score is not the score.
 4. Score each 1-10. Show the user **only the 8+ stocks**, each with its score and reasons in a
    few plain lines (Hebrew), and always spell out the stop: buy price and stop price
    = buy price x 0.97 (e.g. "קנייה 100$ ← סטופ 97$").

@@ -85,7 +85,8 @@ NASDAQ_FILES = ("nasdaqlisted.txt", "otherlisted.txt")
 NASDAQ_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/"
 SPARK_MAX = 20      # Yahoo's spark answers 400 above 20 symbols
 PAUSE = 0.3         # seconds between requests: be polite to free endpoints
-BACKOFF = 5.0       # seconds to wait before the one retry after a 429
+BACKOFF = 5.0       # seconds before the first retry after a 429; grows each round
+RETRY_ROUNDS = 6    # 5+10+15+20+25+30 s = up to 105 s of waiting on one request
 SLEEP = time.sleep  # tests swap this out
 BAR_MIN = 5
 MAX_CONFIRM = 200   # stage-2 v8 charts per orb scan, most traded first
@@ -233,10 +234,11 @@ def http_get(url, timeout=20):
 
 
 def yahoo_get(path):
-    """GET a Yahoo Finance path. query2 first, query1 on a 429 or 5xx, and one
-    more round after BACKOFF seconds if a 429 was seen. 4xx other than 429 is final."""
+    """GET a Yahoo Finance path. query2 first, query1 on a 429 or 5xx, and up to
+    RETRY_ROUNDS more rounds after a growing pause (BACKOFF, 2x, 3x...) while 429s
+    keep coming: cloud IPs get rate-limited. 4xx other than 429 is final."""
     last = "no answer"
-    for attempt in (0, 1):
+    for attempt in range(RETRY_ROUNDS + 1):
         saw_429 = False
         for host in YAHOO_HOSTS:
             try:
@@ -260,8 +262,8 @@ def yahoo_get(path):
             except (urllib.error.URLError, OSError) as e:
                 last = str(getattr(e, "reason", e))
                 continue
-        if attempt == 0 and saw_429:
-            SLEEP(BACKOFF)
+        if attempt < RETRY_ROUNDS and saw_429:
+            SLEEP(BACKOFF * (attempt + 1))
             continue
         break
     raise ScanError("Yahoo answered %s for %s" % (last, path.split("?")[0]))
