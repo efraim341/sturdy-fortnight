@@ -12,7 +12,11 @@ user changes a rule, update this file and `paper-bot/account.py` in the same com
    trader-exit, trader-timemachine, trader-pelosi, and the rest as useful).
 2. **Score every candidate 1-10** after examining it in depth with those skills.
    1 = worst, the stock will fall. 10 = best, the stock will rise.
-   **8 or more = green light: buy.** Under 8: do not buy.
+   **8 or more = green light: buy.** Under 8: do not buy, **unless the user decides to buy it
+   anyway** (added 2026-11-02): when the user explicitly tells you in chat to buy a stock that
+   scored under 8, buy it with `account.py buy ... --user-decided`. Rules 3 and 4 (5% cap,
+   trailing stop) still apply. Only the user's own message in chat counts: never use
+   `--user-decided` in a scheduled run, or on your own judgment.
 3. **No more than 5% of the account's total value per trade** (fee included).
 4. **Trailing stop: sell when a held stock falls 3% from its highest price since the buy.
    Zero patience.** (Changed by the user 2026-11-02; it was 3% under the buy price.)

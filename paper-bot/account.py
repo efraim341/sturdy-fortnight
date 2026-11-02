@@ -13,7 +13,8 @@ every order is a row in the local database.
     python3 account.py quote NVDA AAPL
 
 Iron rules (see CLAUDE.md), enforced here, not just promised:
-    - buy only with a score of 8 or more
+    - buy only with a score of 8 or more, unless the user decides in chat to buy an
+      under-8 stock anyway (--user-decided); the 5% cap and the stop still apply
     - each buy is at most 5% of the account's total value, fee included
     - every position has a trailing stop: 3% under the highest price since the buy
       (it starts 3% under the buy price and only moves up)
@@ -178,9 +179,11 @@ def cmd_check(sim: Simulator) -> None:
     show(sim)
 
 
-def cmd_buy(sim: Simulator, symbol: str, score: float, why: str) -> None:
-    if score < MIN_SCORE:
-        raise SystemExit(f"REFUSED: score {score} is under {MIN_SCORE:g} (iron rule)")
+def cmd_buy(sim: Simulator, symbol: str, score: float, why: str, user_decided: bool = False) -> None:
+    # Rule 2: under 8 only when the user decided in chat to buy this stock anyway.
+    if score < MIN_SCORE and not user_decided:
+        raise SystemExit(f"REFUSED: score {score} is under {MIN_SCORE:g} (iron rule); "
+                         "only the user can decide to buy it anyway (--user-decided)")
     symbol = symbol.upper()
     if any(p["symbol"] == symbol for p in sim.state()["positions"]):
         raise SystemExit(f"REFUSED: already holding {symbol}; adding would break the 5% per-trade cap")
@@ -196,7 +199,8 @@ def cmd_buy(sim: Simulator, symbol: str, score: float, why: str) -> None:
     print(f"{r.status.upper()}: {o['action']} {o['qty']:g} {symbol} @ {price:.2f} "
           f"= ${o['qty'] * price:,.2f} + fee {o['fee']:.2f} | {r.message}")
     if r.status == "filled":
-        journal({"action": "buy", "symbol": symbol, "price": price, "qty": qty, "score": score, "why": why})
+        journal({"action": "buy", "symbol": symbol, "price": price, "qty": qty, "score": score, "why": why,
+                 **({"user_decided": True} if score < MIN_SCORE else {})})
     show(sim)
 
 
@@ -222,6 +226,8 @@ def main() -> None:
     b.add_argument("symbol")
     b.add_argument("--score", type=float, required=True)
     b.add_argument("--why", required=True)
+    b.add_argument("--user-decided", action="store_true",
+                   help="the user explicitly decided in chat to buy this under-8 stock (rule 2)")
     s = sub.add_parser("sell")
     s.add_argument("symbol")
     s.add_argument("--why", required=True)
@@ -235,7 +241,7 @@ def main() -> None:
         return
     sim = simulator()
     {"state": lambda: show(sim), "report": lambda: report(sim), "check": lambda: cmd_check(sim),
-     "buy": lambda: cmd_buy(sim, a.symbol, a.score, a.why),
+     "buy": lambda: cmd_buy(sim, a.symbol, a.score, a.why, a.user_decided),
      "sell": lambda: cmd_sell(sim, a.symbol, a.why)}[a.cmd]()
 
 
