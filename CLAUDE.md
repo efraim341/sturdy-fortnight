@@ -19,8 +19,11 @@ user changes a rule, update this file and `paper-bot/account.py` in the same com
    The stop starts at buy price x 0.97 and only moves up: always highest price x 0.97.
    `account.py check` replays every 5-minute bar since the buy, so a stop hit between
    checks is caught and filled at the stop (or at the open, if the stock gapped under it).
-5. **Show the user only stocks that scored 8 or more.** Never list, mention or rank stocks
-   under 8. If nothing scored 8+, say so in one line (and what was checked), with no names.
+5. **Show the user only stocks that scored 8 or more.** Never list or rank stocks under 8.
+6. **If no stock scored 8+, show the single highest-scored stock instead** (added by the user
+   2026-11-02): its name, score, reasons, price and the stop it would get (price x 0.97),
+   clearly marked as under 8 and **not bought** (rule 2 still decides buying). Only that one
+   stock, never a list. If the in-depth check could not run, say so instead of guessing a score.
 
 The user does not want a stored ranking table: compute scores fresh each time they ask.
 
@@ -62,7 +65,8 @@ change**, or the trades are lost when the session ends.
 3. Examine the top ~10 in depth: news and 8-Ks (`trader-news --tickers ...`), earnings and
    margins (`trader-analyst`, SEC), and the earnings date. A report due within ~5 trading days
    can gap the stock past the -3% stop: that lowers the score. A pre-score is not the score.
-4. Score each 1-10. Show the user **only the 8+ stocks**, each with its score and reasons in a
+4. Score each 1-10. Show the user **only the 8+ stocks** (or, if none, the one highest-scored
+   stock, marked "under 8, not bought"), each with its score and reasons in a
    few plain lines (Hebrew), and always spell out the stop: buy price and starting stop
    = buy price x 0.97 (e.g. "קנייה 100$ ← סטופ 97$"), which then trails 3% under the peak.
 5. Buy every stock that scored 8+ with `account.py buy` (one position per stock), unless the
@@ -80,7 +84,8 @@ The user asked for a daily message after a full scan. Each run:
 3. End with ONE short message in Hebrew for the user's phone:
    - each 8+ stock: name, ticker, score, 2-3 reasons, buy price, starting stop = price x 0.97
      (show the calculation), and that it was bought;
-   - or, if nothing reached 8: one line saying no stock reached 8 today (no names);
+   - or, if nothing reached 8: say so, then the one highest-scored stock with its score,
+     reasons, price and would-be stop (price x 0.97), marked "under 8, not bought";
    - any stop-loss sales since the last run;
    - the account: total value, cash, P&L, open positions with their peak and current
      trailing stop (peak x 0.97).
