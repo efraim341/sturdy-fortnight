@@ -85,6 +85,15 @@ The user asked for a daily message after a full scan. Each run:
    - the account: total value, cash, P&L, open positions with their peak and current
      trailing stop (peak x 0.97).
 
+## Daily close summary (scheduled task, US trading days, after the 16:00 ET close)
+
+No scanning and no buying. Run `account.py check` (applies the trailing stop to the whole
+day's bars), then `account.py report`, commit and push `paper-bot/account/`, and send ONE short
+message in Hebrew: for every open stock, the buy price, the current trailing stop (peak x 0.97,
+show the peak), and its profit/loss in $ and %; every stock sold (today or before) with its
+buy price, sale price and profit/loss; and the account total (value, cash, total P&L).
+On a day the NYSE was closed, one line saying so plus the account total.
+
 Yahoo rate-limits cloud IPs (HTTP 429). In your own scan scripts, pause ~0.5 s between
 requests and retry 429s with a growing pause (5 s, 10 s, 15 s...) instead of dropping the stock.
 

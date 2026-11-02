@@ -6,6 +6,7 @@ Prices come from Yahoo's free chart endpoint. There is no broker anywhere:
 every order is a row in the local database.
 
     python3 account.py state                       # balance, positions, P&L
+    python3 account.py report                      # end-of-day summary per stock
     python3 account.py check                       # replay bars since each buy -> trailing -3% stop
     python3 account.py buy NVDA --score 8.5 --why "..."   # 5% of total value, 3% stop
     python3 account.py sell NVDA --why "..."
@@ -113,6 +114,35 @@ def show(sim: Simulator) -> None:
         print("  no open positions")
 
 
+def report(sim: Simulator) -> None:
+    """End-of-day summary: every stock bought, its buy price, its trailing stop now, its P&L."""
+    st = sim.state(order_limit=100_000)
+    filled = [o for o in reversed(st["orders"]) if o["status"] == "filled"]
+    print(f"Account: total value ${st['equity']:,.2f} | cash ${st['cash']:,.2f} | "
+          f"P&L {st['total_pnl']:+,.2f} ({st['total_pnl'] / st['starting_balance']:+.2%}) since "
+          f"${st['starting_balance']:,.0f} | fees paid ${st['fees_paid']:,.2f}")
+    print("\nOPEN (P&L includes the buy fee):")
+    for p in st["positions"]:
+        buy = next(o for o in reversed(filled) if o["symbol"] == p["symbol"] and o["action"] == "buy")
+        peak = max(buy["price"], p["stop_price"] / (1 - STOP_PCT / 100))
+        cost = p["qty"] * p["avg_price"]
+        print(f"  {p['symbol']:6} bought {buy['price']:.2f} on {time.strftime('%Y-%m-%d', time.gmtime(buy['ts']))} | "
+              f"now {p['last_price']:.2f} | peak {peak:.2f} | stop {p['stop_price']:.2f} (peak x 0.97) | "
+              f"P&L {p['unrealized_pnl']:+,.2f} ({p['unrealized_pnl'] / cost:+.2%}) on ${cost:,.2f}")
+    if not st["positions"]:
+        print("  none")
+    print("\nCLOSED (P&L after both fees):")
+    sells = [o for o in filled if o["action"] == "sell"]
+    for o in sells:
+        buy = next(b for b in reversed(filled) if b["symbol"] == o["symbol"] and b["action"] == "buy"
+                   and b["ts"] <= o["ts"])
+        why = "trailing stop" if o["source"] == "stop_loss" else "sold"
+        print(f"  {o['symbol']:6} bought {buy['price']:.2f} -> {why} {o['price']:.2f} on "
+              f"{time.strftime('%Y-%m-%d', time.gmtime(o['ts']))} | P&L {o['realized_pnl']:+,.2f}")
+    if not sells:
+        print("  none")
+
+
 def price_signal(sim: Simulator, symbol: str, price: float, ts: float | None = None) -> list[dict]:
     sig = Signal(action="price", symbol=symbol, price=price, id=uuid.uuid4().hex)
     return sim.process(sig, "test", now=ts).orders
@@ -186,6 +216,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("state")
+    sub.add_parser("report")
     sub.add_parser("check")
     b = sub.add_parser("buy")
     b.add_argument("symbol")
@@ -203,7 +234,7 @@ def main() -> None:
             print(f"{sym.upper()} {quote(sym.upper()):.2f}")
         return
     sim = simulator()
-    {"state": lambda: show(sim), "check": lambda: cmd_check(sim),
+    {"state": lambda: show(sim), "report": lambda: report(sim), "check": lambda: cmd_check(sim),
      "buy": lambda: cmd_buy(sim, a.symbol, a.score, a.why),
      "sell": lambda: cmd_sell(sim, a.symbol, a.why)}[a.cmd]()
 
