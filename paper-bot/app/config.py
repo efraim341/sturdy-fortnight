@@ -42,6 +42,7 @@ class Settings:
     max_order_usd: float     # any single order bigger than this is rejected
     max_daily_loss_usd: float  # new buys stop once today's realized loss reaches this
     default_stop_loss_pct: float  # stop placed this % below the buy price (0 = none)
+    trailing_stop_pct: float  # >0: the stop follows the price up, this % under the highest price seen
     allow_fractional: bool   # fractional quantities (crypto) or whole shares only
 
     test_mode: bool          # dashboard can send fake signals
@@ -61,6 +62,7 @@ def load_settings() -> Settings:
         max_order_usd=_float("MAX_ORDER_USD", 2_000.0),
         max_daily_loss_usd=_float("MAX_DAILY_LOSS_USD", 300.0),
         default_stop_loss_pct=_float("DEFAULT_STOP_LOSS_PCT", 2.0),
+        trailing_stop_pct=_float("TRAILING_STOP_PCT", 0.0),
         allow_fractional=_bool("ALLOW_FRACTIONAL", True),
         test_mode=_bool("TEST_MODE", True),
         dedup_window_seconds=_int("DEDUP_WINDOW_SECONDS", 86_400),

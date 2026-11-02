@@ -156,3 +156,25 @@ def test_symbol_cleanup():
     assert sig(action="buy", price=1, symbol="binance:btcusdt").symbol == "BTCUSDT"
     with pytest.raises(ValueError):
         sig(action="buy", price=1, symbol="AA PL;DROP")
+
+
+def test_trailing_stop_follows_price_up_never_down(settings):
+    sm = sim(settings, trailing_stop_pct=3.0)
+    sm.process(sig(action="buy", price=100, qty=1, stop_loss_pct=3, id="a"), "test", NOW)
+    stop = lambda: sm.state(now=NOW)["positions"][0]["stop_price"]
+    assert stop() == pytest.approx(97.0)
+    sm.process(sig(action="price", price=110, id="b"), "test", NOW)
+    assert stop() == pytest.approx(106.7)
+    sm.process(sig(action="price", price=120, id="c"), "test", NOW)
+    assert stop() == pytest.approx(116.4)
+    sm.process(sig(action="price", price=118, id="d"), "test", NOW)  # dips: stop stays
+    assert stop() == pytest.approx(116.4)
+    r = sm.process(sig(action="price", price=116.4, id="e"), "test", NOW)
+    assert r.orders[0]["source"] == "stop_loss" and r.orders[0]["realized_pnl"] > 15
+
+
+def test_fixed_stop_without_trailing(settings):
+    sm = sim(settings)
+    sm.process(sig(action="buy", price=100, qty=1, stop_loss_pct=3, id="a"), "test", NOW)
+    sm.process(sig(action="price", price=120, id="b"), "test", NOW)
+    assert sm.state(now=NOW)["positions"][0]["stop_price"] == pytest.approx(97.0)

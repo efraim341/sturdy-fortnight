@@ -6,7 +6,7 @@ Prices come from Yahoo's free chart endpoint. There is no broker anywhere:
 every order is a row in the local database.
 
     python3 account.py state                       # balance, positions, P&L
-    python3 account.py check                       # live prices -> enforce the -3% stop
+    python3 account.py check                       # replay bars since each buy -> trailing -3% stop
     python3 account.py buy NVDA --score 8.5 --why "..."   # 5% of total value, 3% stop
     python3 account.py sell NVDA --why "..."
     python3 account.py quote NVDA AAPL
@@ -14,7 +14,8 @@ every order is a row in the local database.
 Iron rules (see CLAUDE.md), enforced here, not just promised:
     - buy only with a score of 8 or more
     - each buy is at most 5% of the account's total value, fee included
-    - every position has a stop 3% under its buy price
+    - every position has a trailing stop: 3% under the highest price since the buy
+      (it starts 3% under the buy price and only moves up)
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import json
 import sys
 import time
 import urllib.request
+import uuid
 from dataclasses import replace
 from pathlib import Path
 
@@ -52,6 +54,7 @@ def simulator() -> Simulator:
         fee_rate=0.001,
         fee_fixed=0.0,
         default_stop_loss_pct=STOP_PCT,
+        trailing_stop_pct=STOP_PCT,  # rule 4: the stop trails 3% under the highest price
         max_daily_loss_usd=0.0,  # not one of the user's rules
         max_order_usd=1e12,      # the 5% rule is applied per buy below
         allow_fractional=True,   # fractional shares, so 5% can buy any stock
@@ -60,22 +63,36 @@ def simulator() -> Simulator:
     return Simulator(s, Store(str(DB)))
 
 
-def quote(symbol: str) -> float:
-    """Latest price from Yahoo (regular session, or the last close when the market is shut)."""
+def chart(symbol: str, query: str) -> dict:
+    """One Yahoo chart result. Yahoo rate-limits (HTTP 429) shared cloud IPs:
+    alternate hosts and back off instead of giving up."""
     last_err = None
-    # Yahoo rate-limits (HTTP 429) shared cloud IPs: alternate hosts and back off.
     for attempt in range(8):
         host = ("query1", "query2")[attempt % 2]
-        url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?range=1d&interval=1m"
+        url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?{query}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=15) as r:
-                meta = json.load(r)["chart"]["result"][0]["meta"]
-            return float(meta["regularMarketPrice"])
+                return json.load(r)["chart"]["result"][0]
         except Exception as e:
             last_err = e
             time.sleep(min(60, 5 * (attempt + 1)))
-    raise SystemExit(f"no price for {symbol}: {last_err}")
+    raise SystemExit(f"no data for {symbol}: {last_err}")
+
+
+def quote(symbol: str) -> float:
+    """Latest price (regular session, or the last close when the market is shut)."""
+    return float(chart(symbol, "range=1d&interval=1m")["meta"]["regularMarketPrice"])
+
+
+def bars_since(symbol: str, since: float) -> list[tuple]:
+    """(ts, open, high, low) of every regular-session bar after `since`, oldest first:
+    5-minute bars for the last ~55 days, hourly bars beyond that (Yahoo's limits)."""
+    interval = "5m" if time.time() - since < 55 * 86_400 else "60m"
+    r = chart(symbol, f"period1={int(since)}&period2={int(time.time())}&interval={interval}")
+    q = r["indicators"]["quote"][0]
+    return [(t, o, h, l) for t, o, h, l in zip(r.get("timestamp") or [], q["open"], q["high"], q["low"])
+            if o and h and l and t > since]
 
 
 def journal(entry: dict) -> None:
@@ -96,13 +113,38 @@ def show(sim: Simulator) -> None:
         print("  no open positions")
 
 
+def price_signal(sim: Simulator, symbol: str, price: float, ts: float | None = None) -> list[dict]:
+    sig = Signal(action="price", symbol=symbol, price=price, id=uuid.uuid4().hex)
+    return sim.process(sig, "test", now=ts).orders
+
+
+def replay(sim: Simulator, p: dict) -> list[dict]:
+    """Walk every bar since the buy, as a real trailing stop would have seen it.
+
+    Within a bar the order of high and low is unknown, so take the cautious one:
+    the low is tested against the stop from before the bar, then the bar's high
+    raises the stop. A bar that opens under the stop fills at its open (a gap).
+    """
+    stop = p["stop_price"]
+    for ts, o, h, l in bars_since(p["symbol"], p["opened_at"]):
+        if l <= stop:
+            sim.set_stop(p["symbol"], stop)
+            return price_signal(sim, p["symbol"], min(o, stop), ts)
+        stop = max(stop, round(h * (1 - STOP_PCT / 100), 6))
+    sim.set_stop(p["symbol"], stop)
+    return []
+
+
 def cmd_check(sim: Simulator) -> None:
+    """Rule 4: the stop trails 3% under the highest price since the buy; sell when it is hit."""
     for p in sim.state()["positions"]:
-        price = quote(p["symbol"])
-        r = sim.process(Signal(action="price", symbol=p["symbol"], price=price), "test")
-        for o in r.orders:
-            print(f"STOP: sold {o['qty']:g} {o['symbol']} @ {o['price']:.2f} ({o['realized_pnl']:+,.2f}) - {o['reason']}")
-            journal({"action": "stop_loss", "symbol": o["symbol"], "price": o["price"], "pnl": o["realized_pnl"]})
+        sold = replay(sim, p) or price_signal(sim, p["symbol"], quote(p["symbol"]))
+        for o in sold:
+            when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(o["ts"]))
+            print(f"STOP: sold {o['qty']:g} {o['symbol']} @ {o['price']:.2f} on {when} "
+                  f"({o['realized_pnl']:+,.2f}) - {o['reason']}")
+            journal({"action": "stop_loss", "symbol": o["symbol"], "price": o["price"],
+                     "pnl": o["realized_pnl"], "at": when})
     show(sim)
 
 

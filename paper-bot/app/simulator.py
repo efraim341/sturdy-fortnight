@@ -10,7 +10,8 @@ Rules:
 - Buy fees are folded into the position's average cost, so a sale's
   realized P&L is net of both fees.
 - Stop loss: every signal that carries a price for a symbol first checks
-  that symbol's stop. If the price is at or below the stop, the whole
+  that symbol's stop. With trailing_stop_pct set, a higher price raises the
+  stop to that % under it (it never moves down). If the price is at or below the stop, the whole
   position is sold at that price (like a real stop, it can fill below the
   stop level when the price gaps).
 - Limits: an order worth more than max_order_usd is rejected; once today's
@@ -171,7 +172,14 @@ class Simulator:
             return []
         db.execute("UPDATE positions SET last_price = ? WHERE symbol = ?", (sig.price, sig.symbol))
         stop = pos["stop_price"]
-        if stop is None or sig.price > stop:
+        if stop is None:
+            return []
+        if sig.price > stop:
+            if self.s.trailing_stop_pct > 0:
+                # Trailing stop: raise it under the new high, never lower it.
+                trail = _r(sig.price * (1 - self.s.trailing_stop_pct / 100), 6)
+                if trail > stop:
+                    db.execute("UPDATE positions SET stop_price = ? WHERE symbol = ?", (trail, sig.symbol))
             return []
         reason = f"stop loss: price {sig.price:g} reached stop {stop:g}"
         return [self._sell(db, now, "stop_loss", sig.symbol, pos["qty"], sig.price, reason, sig.id)]
