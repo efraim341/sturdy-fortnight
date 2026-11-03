@@ -2,7 +2,7 @@
 
 Uses the same simulator as the webhook server, with the account kept in
 account/paperbot.db (committed to git so it survives between sessions).
-Prices come from Yahoo's free chart endpoint. There is no broker anywhere:
+Prices come from marketdata.py (Twelve Data, Yahoo as fallback). There is no broker anywhere:
 every order is a row in the local database.
 
     python3 account.py state                       # balance, positions, P&L
@@ -26,7 +26,6 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -37,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 from app.config import load_settings  # noqa: E402
 from app.simulator import Signal, Simulator  # noqa: E402
 from app.storage import Store  # noqa: E402
+import marketdata  # noqa: E402
 
 DB = ROOT / "account" / "paperbot.db"
 JOURNAL = ROOT / "account" / "journal.jsonl"
@@ -44,9 +44,6 @@ JOURNAL = ROOT / "account" / "journal.jsonl"
 MIN_SCORE = 8.0
 MAX_TRADE_PCT = 5.0
 STOP_PCT = 3.0
-
-UA = "Mozilla/5.0 (compatible; paperbot/1.0)"
-
 
 def simulator() -> Simulator:
     s = replace(
@@ -65,36 +62,20 @@ def simulator() -> Simulator:
     return Simulator(s, Store(str(DB)))
 
 
-def chart(symbol: str, query: str) -> dict:
-    """One Yahoo chart result. Yahoo rate-limits (HTTP 429) shared cloud IPs:
-    alternate hosts and back off instead of giving up."""
-    last_err = None
-    for attempt in range(8):
-        host = ("query1", "query2")[attempt % 2]
-        url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?{query}"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=15) as r:
-                return json.load(r)["chart"]["result"][0]
-        except Exception as e:
-            last_err = e
-            time.sleep(min(60, 5 * (attempt + 1)))
-    raise SystemExit(f"no data for {symbol}: {last_err}")
-
-
 def quote(symbol: str) -> float:
     """Latest price (regular session, or the last close when the market is shut)."""
-    return float(chart(symbol, "range=1d&interval=1m")["meta"]["regularMarketPrice"])
+    try:
+        return marketdata.price(symbol)
+    except Exception as e:
+        raise SystemExit(f"no price for {symbol}: {e}")
 
 
 def bars_since(symbol: str, since: float) -> list[tuple]:
-    """(ts, open, high, low) of every regular-session bar after `since`, oldest first:
-    5-minute bars for the last ~55 days, hourly bars beyond that (Yahoo's limits)."""
-    interval = "5m" if time.time() - since < 55 * 86_400 else "60m"
-    r = chart(symbol, f"period1={int(since)}&period2={int(time.time())}&interval={interval}")
-    q = r["indicators"]["quote"][0]
-    return [(t, o, h, l) for t, o, h, l in zip(r.get("timestamp") or [], q["open"], q["high"], q["low"])
-            if o and h and l and t > since]
+    """(ts, open, high, low) of every regular-session bar after `since`, oldest first."""
+    try:
+        return marketdata.bars_since(symbol, since)
+    except Exception as e:
+        raise SystemExit(f"no bars for {symbol}: {e}")
 
 
 def journal(entry: dict) -> None:

@@ -29,9 +29,11 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
+import marketdata
+
 UA = {"User-Agent": "Mozilla/5.0 (compatible; paperbot/1.0)"}
 BULLISH = {"breakout_20d", "bull_flag", "reclaim_ma20"}
-PAUSE = 0.5
+PAUSE = 0.0  # marketdata keeps Twelve Data's 8-a-minute limit itself
 
 
 def get(url: str, rounds: int = 7) -> bytes:
@@ -53,12 +55,8 @@ def get(url: str, rounds: int = 7) -> bytes:
 
 
 def daily(symbol: str):
-    raw = get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=2y&interval=1d")
-    r = json.loads(raw)["chart"]["result"][0]
-    q = r["indicators"]["quote"][0]
-    rows = [(o, h, l, c) for o, h, l, c in zip(q["open"], q["high"], q["low"], q["close"])
-            if o and h and l and c]
-    return rows, r["meta"]
+    """About two years of daily (open, high, low, close), from marketdata (Twelve Data first)."""
+    return [(o, h, l, c) for _, o, h, l, c in marketdata.daily(symbol)]
 
 
 def earnings_soon(symbol: str) -> str:
@@ -131,7 +129,8 @@ def metrics(sym: str, rows, spy_close):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--watchlist", default="trader/watchlist.json")
-    ap.add_argument("--top", type=int, default=80, help="how many bullish hits to check, most traded first")
+    ap.add_argument("--top", type=int, default=50,
+                    help="how many bullish hits to check, most traded first (8 a minute on Twelve Data)")
     ap.add_argument("--min-price", type=float, default=10)
     ap.add_argument("--json")
     a = ap.parse_args()
@@ -139,18 +138,25 @@ def main() -> None:
     wl = json.load(open(a.watchlist))
     hits = [h for h in wl["hits"] if BULLISH & set(h.get("setups", [])) and h.get("price", 0) >= a.min_price]
     hits = hits[: a.top]
-    spy, _ = daily("SPY")
+    names = {}
+    try:
+        for line in open("trader/universe.txt"):
+            sym, _, name = line.strip().partition("|")
+            names[sym] = name
+    except OSError:
+        pass
+    spy = daily("SPY")
     spy_close = [r[3] for r in spy]
     out, failed = [], []
     for n, h in enumerate(hits, 1):
         try:
-            rows, meta = daily(h["symbol"])
+            rows = daily(h["symbol"])
             m = metrics(h["symbol"], rows, spy_close)
         except Exception as e:
             failed.append(f"{h['symbol']} ({e})")
             continue
         if m:
-            m.update(symbol=h["symbol"], name=(meta.get("longName") or meta.get("shortName") or "")[:30],
+            m.update(symbol=h["symbol"], name=names.get(h["symbol"], "")[:30],
                      setups=",".join(h["setups"]), rsi=h.get("rsi"))
             out.append(m)
         if n % 20 == 0:

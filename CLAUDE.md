@@ -103,6 +103,10 @@ show the peak), and its profit/loss in $ and %; every stock sold (today or befor
 buy price, sale price and profit/loss; and the account total (value, cash, total P&L).
 On a day the NYSE was closed, one line saying so plus the account total.
 
+Prices come from `paper-bot/marketdata.py`: Twelve Data first (the user's free personal key is
+a network secret on api.twelvedata.com: the session never sees it; 8 requests a minute, 800 a
+day, so research.py checks the top 50 by default, about 7 minutes), Yahoo as a fallback.
+
 Yahoo rate-limits cloud IPs (HTTP 429). In your own scan scripts, pause ~0.5 s between
 requests and retry 429s with a growing pause (5 s, 10 s, 15 s...) instead of dropping the stock.
 
