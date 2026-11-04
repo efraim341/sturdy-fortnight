@@ -53,29 +53,44 @@ python3 account.py sell NVDA --why "short reason"
 with a trade journal in `paper-bot/account/journal.jsonl`; **commit and push both after every
 change**, or the trades are lost when the session ends.
 
-## Each time the user asks for picks
+## Each time the user asks for picks: use ALL the skills
 
-1. `python3 account.py check` first (sells anything that fell 3% from its peak).
-2. Scan, from a scratch folder (the tools write `trader/` in the current folder):
-   ```bash
-   mkdir -p /tmp/scan && cd /tmp/scan
-   python3 <repo>/.claude/skills/trader-scanner/scan.py universe
-   python3 <repo>/.claude/skills/trader-scanner/scan.py daily --show 0
-   python3 <repo>/paper-bot/research.py --json research.json
-   ```
-   `research.py` ranks the bullish setups by trend, strength vs SPY, calm (for a 3% stop), a
-   one-year test of -3% stop vs +6% target, and flags headlines about upcoming earnings
-   (a hint only: verify). Both tools wait and retry when Yahoo answers 429; let them finish.
-3. Examine the top ~10 in depth: news and 8-Ks (`trader-news --tickers ...`), earnings and
-   margins (`trader-analyst`, SEC), and the earnings date. A report due within ~5 trading days
-   can gap the stock past the -3% stop: that lowers the score. A pre-score is not the score.
-4. Score each 1-10. Show the user **only the 8+ stocks** (or, if none, the one highest-scored
-   stock, marked "under 8, not bought"), each with its score and reasons in a
-   few plain lines (Hebrew), and always spell out the stop: buy price and starting stop
-   = buy price x 0.97 (e.g. "קנייה 100$ ← סטופ 97$"), which then trails 3% under the peak.
-5. Buy every stock that scored 8+ with `account.py buy` (one position per stock), unless the
-   cash is gone. Never buy under 8, never above 5%.
-6. Commit and push `paper-bot/account/`.
+The user wants every skill they installed used to find the best stocks (2026-11-04). Work
+from a scratch folder (the skills read and write `trader/` in the current folder):
+`S=<repo>/.claude/skills; mkdir -p /tmp/scan && cd /tmp/scan`. Report any step that could
+not run (and why) in the message, and lower confidence for it.
+
+1. **trader-alerts** `python3 $S/trader-alerts/alerts.py clock`: is the NYSE open today
+   (it knows holidays and early closes)? Closed all day: only `account.py check` + a short message.
+2. `python3 <repo>/paper-bot/account.py check` (sells anything that fell 3% from its peak).
+3. **trader-scanner** `scan.py universe` then `scan.py daily --show 0` (all ~6,000 stocks).
+4. `python3 <repo>/paper-bot/research.py --json research.json`: trend, strength vs SPY, calm
+   for a 3% stop, one-year stop test, earnings hint (top 50 bullish setups, ~7 min).
+5. **trader-pelosi** `ptr.py index --since <30 days ago>` and `ptr.py new --read`: recent
+   congressional trades; a recent purchase of a candidate is a small plus, a sale a small minus
+   (filings come up to 45 days late: never decisive). Needs disclosures-clerk.house.gov.
+6. Top ~10 by pre-score: **trader-news** `news.py --tickers ... --hours 168` (headlines and
+   8-Ks; SEC user agent from `$SEC_USER_AGENT`) and **trader-analyst** `facts.py SYM ...`
+   (revenue, margins, EPS vs a year ago; latest earnings 8-K date). A report due within ~5
+   trading days can gap past the stop: lower the score.
+7. Top ~5 finalists, each: **trader-exit** `exit.py plan --symbol SYM --entry <price>
+   --date <today> --time "9:45 AM" --stop pct:3 --target 2R --write`, then
+   **trader-timemachine** `timemachine.py run` (odds of hitting the -3% stop within one session,
+   chance of being green at the close). If the session is open (after 9:45 ET),
+   **trader-entry** `entry.py check SYM`: an opening-range breakout is a plus.
+8. Score each 1-10 from all of the above. Show **only the 8+ stocks** (rule 5; if none, the one
+   highest-scored stock marked "under 8, not bought", rule 6) with reasons in a few plain
+   lines (Hebrew) and the stop: buy price and starting stop = buy price x 0.97
+   (e.g. "קנייה 100$ ← סטופ 97$"), which then trails 3% under the peak.
+9. Each 8+ stock, a second opinion before buying: **trader-budget** `size.py --write` and
+   **trader-risk** `check.py` with `trader/config.json` set to the user's rules (budget = account
+   value, max_position_pct 5, max_order_usd 5% of value, fractional true, no time windows) and
+   `trader/portfolio.json` = the account's cash and positions; **trader-broker**
+   `ticket.py show` renders the ticket for the record. There is no broker connected: nothing is
+   sent anywhere, the trade happens only in the virtual account.
+10. Buy every 8+ stock with `account.py buy` (one position per stock), unless the cash is gone.
+    Never buy under 8 (unless the user decides, rule 2), never above 5%.
+11. Commit and push `paper-bot/account/`.
 
 ## Daily automatic run (scheduled task, US trading days, message ready by 16:30 Israel time)
 
@@ -86,8 +101,9 @@ The user asked for a daily message after a full scan. Each run:
 2. Otherwise do the full "Each time the user asks for picks" procedure above, buy every 8+
    stock, commit and push.
 3. End with ONE short message in Hebrew for the user's phone:
-   - each 8+ stock: name, ticker, score, 2-3 reasons, buy price, starting stop = price x 0.97
-     (show the calculation), and that it was bought;
+   - each 8+ stock: name, ticker, score, 2-3 reasons (naming the skills behind them), buy
+     price, starting stop = price x 0.97 (show the calculation), and that it was bought;
+   - which skills ran and which could not (one line);
    - or, if nothing reached 8: say so, then the one highest-scored stock with its score,
      reasons, price and would-be stop (price x 0.97), marked "under 8, not bought";
    - any stop-loss sales since the last run;
