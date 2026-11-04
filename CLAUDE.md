@@ -66,8 +66,8 @@ not run (and why) in the message, and lower confidence for it.
 3. **trader-scanner** `scan.py universe` then `scan.py daily --show 0` (all ~6,000 stocks).
 4. `python3 <repo>/paper-bot/research.py --json research.json`: trend, strength vs SPY, calm
    for a 3% stop, one-year stop test, earnings hint (top 50 bullish setups, ~7 min).
-5. **trader-pelosi** `ptr.py index --since <30 days ago>` and `ptr.py new --read`: recent
-   congressional trades; a recent purchase of a candidate is a small plus, a sale a small minus
+5. **trader-pelosi** `ptr.py new --since <30 days ago> --read --dry-run --tickers <top ~10>`
+   (~2 min; lines ending "<- SYM is on your list" are the hits): recent congressional trades; a recent purchase of a candidate is a small plus, a sale a small minus
    (filings come up to 45 days late: never decisive). Needs disclosures-clerk.house.gov.
 6. Top ~10 by pre-score: **trader-news** `news.py --tickers ... --hours 168` (headlines and
    8-Ks; SEC user agent from `$SEC_USER_AGENT`) and **trader-analyst** `facts.py SYM ...`
