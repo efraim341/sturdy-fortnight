@@ -6,3 +6,6 @@
 {"ts": "2026-11-04 21:11:27 UTC", "action": "stop_loss", "symbol": "REGN", "price": 958.9517, "pnl": -8.818601, "at": "2026-11-04 15:15 UTC"}
 {"ts": "2026-11-05 13:44:50 UTC", "action": "stop_loss", "symbol": "HLT", "price": 365.64999, "pnl": -1.079676, "at": "2026-11-03 15:45 UTC"}
 {"ts": "2026-11-05 13:56:05 UTC", "action": "buy", "symbol": "AMGN", "price": 478.38, "qty": 1.044201, "score": 8.0, "why": "Score 8: Q3 already reported, revenue +8.5%, EPS +19% (analyst/SEC); +18% in 3 months vs S&P, at a 1-year high, above rising 50/200-day averages (scanner+research); 1y stop test 47% vs 33% break-even; timemachine 0.8% chance of the stop in one session; no congressional trades (pelosi); budget+risk PASS."}
+{"ts": "2026-11-05 21:12:12 UTC", "action": "stop_loss", "symbol": "MAR", "price": 417.63835, "pnl": -3.304649, "at": "2026-11-05 16:50 UTC"}
+{"ts": "2026-11-05 21:12:12 UTC", "action": "stop_loss", "symbol": "HLT", "price": 369.8998, "pnl": 4.712592, "at": "2026-11-05 15:25 UTC"}
+{"ts": "2026-11-05 21:12:13 UTC", "action": "stop_loss", "symbol": "AMGN", "price": 468.2287, "pnl": -11.588435, "at": "2026-11-05 16:20 UTC"}
