@@ -136,14 +136,20 @@ def replay(sim: Simulator, p: dict) -> list[dict]:
     Within a bar the order of high and low is unknown, so take the cautious one:
     the low is tested against the stop from before the bar, then the bar's high
     raises the stop. A bar that opens under the stop fills at its open (a gap).
+
+    The walk always starts from the stop the buy got (buy price x 0.97), never from
+    the stop saved by an earlier check: a raised stop must not be tested against
+    bars from before the high that raised it.
     """
-    stop = p["stop_price"]
+    buys = [o for o in sim.state(order_limit=100_000)["orders"]
+            if o["symbol"] == p["symbol"] and o["action"] == "buy" and o["status"] == "filled"]
+    stop = round(buys[0]["price"] * (1 - STOP_PCT / 100), 6) if buys else p["stop_price"]
     for ts, o, h, l in bars_since(p["symbol"], p["opened_at"]):
         if l <= stop:
             sim.set_stop(p["symbol"], stop)
             return price_signal(sim, p["symbol"], min(o, stop), ts)
         stop = max(stop, round(h * (1 - STOP_PCT / 100), 6))
-    sim.set_stop(p["symbol"], stop)
+    sim.set_stop(p["symbol"], max(stop, p["stop_price"]))
     return []
 
 
