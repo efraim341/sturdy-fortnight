@@ -94,15 +94,21 @@ not run (and why) in the message, and lower confidence for it.
     Never buy under 8 (unless the user decides, rule 2), never above 5%.
 11. Commit and push `paper-bot/account/`.
 
-## Daily automatic run (scheduled task, US trading days, message ready by 16:30 Israel time)
+## Daily automatic run (scheduled task, US trading days, 19:07 Israel time = after the open)
 
-The user asked for a daily message after a full scan. Each run:
+The user asked (2026-11-05) for the scan and the update on their stocks together, after the
+market opens. 19:07 Israel is ~12:07 ET: after the 6-9 AM Pacific window in which scheduled
+runs get delayed, and late enough for trader-entry's opening range. While the session is open
+the day's volume is partial: run `scan.py daily --show 0 --min-volume 400000`. Each run:
 
 1. If the NYSE is closed today (weekend or holiday), skip the scan: just run
    `account.py check`, and send a one-line message saying the market is closed plus the account.
 2. Otherwise do the full "Each time the user asks for picks" procedure above, buy every 8+
    stock, commit and push.
 3. End with ONE short message in Hebrew for the user's phone:
+   - first, the holdings update: each open stock's price now, today's change in $ and % since
+     yesterday's close (`marketdata.daily(SYM)[-2]` is yesterday's bar), P&L since the buy,
+     peak and trailing stop, and any stop sale;
    - each 8+ stock: name, ticker, score, 2-3 reasons (naming the skills behind them), buy
      price, starting stop = price x 0.97 (show the calculation), and that it was bought;
    - which skills ran and which could not (one line);
