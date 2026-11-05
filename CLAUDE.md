@@ -94,11 +94,11 @@ not run (and why) in the message, and lower confidence for it.
     Never buy under 8 (unless the user decides, rule 2), never above 5%.
 11. Commit and push `paper-bot/account/`.
 
-## Daily automatic run (scheduled task, US trading days, 19:07 Israel time = after the open)
+## Daily automatic run (scheduled task, US trading days, 17:00 Israel time = after the open)
 
 The user asked (2026-11-05) for the scan and the update on their stocks together, after the
-market opens. 19:07 Israel is ~12:07 ET: after the 6-9 AM Pacific window in which scheduled
-runs get delayed, and late enough for trader-entry's opening range. While the session is open
+market opens, at 17:00 Israel time (~10:00 ET, after trader-entry's 15-minute opening range).
+Scheduled runs can start late in that hour: if it fires late, just run it. While the session is open
 the day's volume is partial: run `scan.py daily --show 0 --min-volume 400000`. Each run:
 
 1. If the NYSE is closed today (weekend or holiday), skip the scan: just run
