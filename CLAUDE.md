@@ -85,7 +85,9 @@ not run (and why) in the message, and lower confidence for it.
 9. Each 8+ stock, a second opinion before buying: **trader-budget** `size.py --write` and
    **trader-risk** `check.py` with `trader/config.json` set to the user's rules (budget = account
    value, max_position_pct 5, max_order_usd 5% of value, fractional true, no time windows) and
-   `trader/portfolio.json` = the account's cash and positions; **trader-broker**
+   `trader/portfolio.json` = the account's cash and positions as
+   `{"cash": C, "positions": [{"ticker": T, "lots": [{"shares": Q, "cost": Q*last_price}]}]}`
+   (without lots/cost, trader-risk values positions at 0 and wrongly blocks on the 5% cap); **trader-broker**
    `ticket.py show` renders the ticket for the record. There is no broker connected: nothing is
    sent anywhere, the trade happens only in the virtual account.
 10. Buy every 8+ stock with `account.py buy` (one position per stock), unless the cash is gone.
