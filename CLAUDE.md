@@ -29,6 +29,9 @@ user changes a rule, update this file and `paper-bot/account.py` in the same com
    clearly marked as under 8 and **not bought** (rule 2 still decides buying). Only that one
    stock, never a list. If the in-depth check could not run, say so instead of guessing a score.
 
+**Always write to the user in Hebrew**, every message, including short confirmations (the user
+asked again on 2026-11-09). Tickers, numbers and skill names may stay as they are.
+
 The user does not want a stored ranking table: compute scores fresh each time they ask.
 
 ## SEC data (trader-analyst, trader-news 8-Ks)
