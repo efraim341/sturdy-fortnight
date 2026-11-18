@@ -5,9 +5,9 @@ Reads trader/watchlist.json (from `trader-scanner daily`), keeps the bullish set
 measures what the iron rules care about:
 
 - trend and strength: 1/3/6/12-month returns, vs the S&P 500 (SPY), above rising 50/200-day averages
-- safety under a -3% stop: volatility, ATR, share of days that dipped 3%
-- stop test: over the past year, how often a buy hit -3% before +6% (break-even 33%),
-  and how often the stop was gapped through (a loss bigger than 3%)
+- calm: volatility, ATR, share of days that dipped 3%
+- stop test: over the past year, how often a buy hit -10% before +20% within 60 days (break-even 33%),
+  and how often the stop was gapped through (a loss bigger than the stop)
 - upcoming earnings: Yahoo headlines that announce a report (gap risk past the stop)
 
 It prints a ranked shortlist with a mechanical pre-score. The pre-score is only a
@@ -33,6 +33,7 @@ import marketdata
 
 UA = {"User-Agent": "Mozilla/5.0 (compatible; paperbot/1.0)"}
 BULLISH = {"breakout_20d", "bull_flag", "reclaim_ma20"}
+STOP = 0.10  # rule 4's trailing stop; the stop test sets it against a 2R target
 PAUSE = 0.0  # marketdata keeps Twelve Data's 8-a-minute limit itself
 
 
@@ -89,17 +90,17 @@ def metrics(sym: str, rows, spy_close):
     atr = sum(max(rows[i][1] - rows[i][2], abs(rows[i][1] - c[i - 1]), abs(rows[i][2] - c[i - 1]))
               for i in range(len(c) - 14, len(c))) / 14 / c[-1]
     dip3 = sum(1 for i in range(len(c) - 60, len(c)) if rows[i][2] < c[i - 1] * 0.97) / 60
-    # stop test: enter at each close of the past year, -3% stop vs +6% target, 20 days max
+    # stop test: enter at each close of the past year, -STOP vs +2*STOP, 60 days max
     win = lose = gapped = 0
     for i in range(len(c) - 260, len(c) - 1):
         e = c[i]
-        for j in range(i + 1, min(i + 21, len(rows))):
+        for j in range(i + 1, min(i + 61, len(rows))):
             o, h, l, _ = rows[j]
-            if l <= e * 0.97:
+            if l <= e * (1 - STOP):
                 lose += 1
-                gapped += o < e * 0.97
+                gapped += o < e * (1 - STOP)
                 break
-            if h >= e * 1.06:
+            if h >= e * (1 + 2 * STOP):
                 win += 1
                 break
     m = {
@@ -117,7 +118,7 @@ def metrics(sym: str, rows, spy_close):
     s = 0.0
     s += min(2.0, max(0.0, m["rs3m"] * 8))                     # strength vs market
     s += 0.5 * m["above50"] + 0.5 * m["above200"] + 0.5 * m["sma50_rising"]
-    s += max(0.0, 1.5 - m["vol"] * 3)                           # calm enough for a 3% stop
+    s += max(0.0, 1.5 - m["vol"] * 3)                           # calm
     s += max(0.0, 1.0 - m["dip3"] * 5)
     s += min(2.5, max(0.0, (m["stop_test_win"] - 0.33) * 15))   # edge over break-even
     s += 0.5 if m["off_high"] > -0.05 else 0.0

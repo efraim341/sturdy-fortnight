@@ -7,8 +7,8 @@ every order is a row in the local database.
 
     python3 account.py state                       # balance, positions, P&L
     python3 account.py report                      # end-of-day summary per stock
-    python3 account.py check                       # replay bars since each buy -> trailing -3% stop
-    python3 account.py buy NVDA --score 8.5 --why "..."   # 5% of total value, 3% stop
+    python3 account.py check                       # replay bars since each buy -> trailing -10% stop
+    python3 account.py buy NVDA --score 8.5 --why "..."   # 5% of total value, 10% trailing stop
     python3 account.py sell NVDA --why "..."
     python3 account.py quote NVDA AAPL
 
@@ -16,8 +16,8 @@ Iron rules (see CLAUDE.md), enforced here, not just promised:
     - buy only with a score of 8 or more, unless the user decides in chat to buy an
       under-8 stock anyway (--user-decided); the 5% cap and the stop still apply
     - each buy is at most 5% of the account's total value, fee included
-    - every position has a trailing stop: 3% under the highest price since the buy
-      (it starts 3% under the buy price and only moves up)
+    - every position has a trailing stop: 10% under the highest price since the buy
+      (it starts 10% under the buy price and only moves up)
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ JOURNAL = ROOT / "account" / "journal.jsonl"
 
 MIN_SCORE = 8.0
 MAX_TRADE_PCT = 5.0
-STOP_PCT = 3.0
+STOP_PCT = 10.0  # rule 4: trailing 10% (the user's decision, 2026-11-18)
 
 def simulator() -> Simulator:
     s = replace(
@@ -53,7 +53,7 @@ def simulator() -> Simulator:
         fee_rate=0.001,
         fee_fixed=0.0,
         default_stop_loss_pct=STOP_PCT,
-        trailing_stop_pct=STOP_PCT,  # rule 4: the stop trails 3% under the highest price
+        trailing_stop_pct=STOP_PCT,  # rule 4: the stop trails 10% under the highest price
         max_daily_loss_usd=0.0,  # not one of the user's rules
         max_order_usd=1e12,      # the 5% rule is applied per buy below
         allow_fractional=True,   # fractional shares, so 5% can buy any stock
@@ -109,7 +109,7 @@ def report(sim: Simulator) -> None:
         peak = max(buy["price"], p["stop_price"] / (1 - STOP_PCT / 100))
         cost = p["qty"] * p["avg_price"]
         print(f"  {p['symbol']:6} bought {buy['price']:.2f} on {time.strftime('%Y-%m-%d', time.gmtime(buy['ts']))} | "
-              f"now {p['last_price']:.2f} | peak {peak:.2f} | stop {p['stop_price']:.2f} (peak x 0.97) | "
+              f"now {p['last_price']:.2f} | peak {peak:.2f} | stop {p['stop_price']:.2f} (peak x 0.90) | "
               f"P&L {p['unrealized_pnl']:+,.2f} ({p['unrealized_pnl'] / cost:+.2%}) on ${cost:,.2f}")
     if not st["positions"]:
         print("  none")
@@ -137,7 +137,7 @@ def replay(sim: Simulator, p: dict) -> list[dict]:
     the low is tested against the stop from before the bar, then the bar's high
     raises the stop. A bar that opens under the stop fills at its open (a gap).
 
-    The walk always starts from the stop the buy got (buy price x 0.97), never from
+    The walk always starts from the stop the buy got (buy price x 0.90), never from
     the stop saved by an earlier check: a raised stop must not be tested against
     bars from before the high that raised it.
     """
@@ -149,12 +149,12 @@ def replay(sim: Simulator, p: dict) -> list[dict]:
             sim.set_stop(p["symbol"], stop)
             return price_signal(sim, p["symbol"], min(o, stop), ts)
         stop = max(stop, round(h * (1 - STOP_PCT / 100), 6))
-    sim.set_stop(p["symbol"], max(stop, p["stop_price"]))
+    sim.set_stop(p["symbol"], stop)  # recomputed from every bar since the buy
     return []
 
 
 def cmd_check(sim: Simulator) -> None:
-    """Rule 4: the stop trails 3% under the highest price since the buy; sell when it is hit."""
+    """Rule 4: the stop trails 10% under the highest price since the buy; sell when it is hit."""
     for p in sim.state()["positions"]:
         sold = replay(sim, p) or price_signal(sim, p["symbol"], quote(p["symbol"]))
         for o in sold:

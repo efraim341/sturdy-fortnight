@@ -18,14 +18,17 @@ user changes a rule, update this file and `paper-bot/account.py` in the same com
    trailing stop) still apply. Only the user's own message in chat counts: never use
    `--user-decided` in a scheduled run, or on your own judgment.
 3. **No more than 5% of the account's total value per trade** (fee included).
-4. **Trailing stop: sell when a held stock falls 3% from its highest price since the buy.
-   Zero patience.** (Changed by the user 2026-11-02; it was 3% under the buy price.)
-   The stop starts at buy price x 0.97 and only moves up: always highest price x 0.97.
+4. **Trailing stop: sell when a held stock falls 10% from its highest price since the buy.
+   Zero patience.** The stop starts at buy price x 0.90 and only moves up: always highest
+   price x 0.90. History: 3% under the buy price (2026-10-29), trailing 3% (2026-11-02),
+   trailing 10% (the user approved it 2026-11-18, after a one-year test on 60 large stocks of
+   the scan's entry signal gave per trade, after fees: 3% -0.40%, 5% -0.08%, 7% +0.37%,
+   10% +1.60%, 15% +0.39%).
    `account.py check` replays every 5-minute bar since the buy, so a stop hit between
    checks is caught and filled at the stop (or at the open, if the stock gapped under it).
 5. **Show the user only stocks that scored 8 or more.** Never list or rank stocks under 8.
 6. **If no stock scored 8+, show the single highest-scored stock instead** (added by the user
-   2026-11-02): its name, score, reasons, price and the stop it would get (price x 0.97),
+   2026-11-02): its name, score, reasons, price and the stop it would get (price x 0.90),
    clearly marked as under 8 and **not bought** (rule 2 still decides buying). Only that one
    stock, never a list. If the in-depth check could not run, say so instead of guessing a score.
 
@@ -46,9 +49,9 @@ in the cloud environment's variables.
 ```bash
 pip install -q pydantic==2.10.4 tzdata          # once per session
 cd paper-bot
-python3 account.py check                         # ALWAYS FIRST: replays bars, enforces the trailing -3% stop
+python3 account.py check                         # ALWAYS FIRST: replays bars, enforces the trailing -10% stop
 python3 account.py state
-python3 account.py buy NVDA --score 8.5 --why "short reason"   # refuses under 8, sizes to 5%, stop at -3%
+python3 account.py buy NVDA --score 8.5 --why "short reason"   # refuses under 8, sizes to 5%, stop at -10%
 python3 account.py sell NVDA --why "short reason"
 ```
 
@@ -65,26 +68,26 @@ not run (and why) in the message, and lower confidence for it.
 
 1. **trader-alerts** `python3 $S/trader-alerts/alerts.py clock`: is the NYSE open today
    (it knows holidays and early closes)? Closed all day: only `account.py check` + a short message.
-2. `python3 <repo>/paper-bot/account.py check` (sells anything that fell 3% from its peak).
+2. `python3 <repo>/paper-bot/account.py check` (sells anything that fell 10% from its peak).
 3. **trader-scanner** `scan.py universe` then `scan.py daily --show 0` (all ~6,000 stocks).
-4. `python3 <repo>/paper-bot/research.py --json research.json`: trend, strength vs SPY, calm
-   for a 3% stop, one-year stop test, earnings hint (top 50 bullish setups, ~7 min).
+4. `python3 <repo>/paper-bot/research.py --json research.json`: trend, strength vs SPY, calm,
+   one-year stop test (-10% vs +20%), earnings hint (top 50 bullish setups, ~7 min).
 5. **trader-pelosi** `ptr.py new --since <30 days ago> --read --dry-run --tickers <top ~10>`
    (~2 min; lines ending "<- SYM is on your list" are the hits): recent congressional trades; a recent purchase of a candidate is a small plus, a sale a small minus
    (filings come up to 45 days late: never decisive). Needs disclosures-clerk.house.gov.
 6. Top ~10 by pre-score: **trader-news** `news.py --tickers ... --hours 168` (headlines and
    8-Ks; SEC user agent from `$SEC_USER_AGENT`) and **trader-analyst** `facts.py SYM ...`
    (revenue, margins, EPS vs a year ago; latest earnings 8-K date). A report due within ~5
-   trading days can gap past the stop: lower the score.
+   trading days can gap the stock hard: lower the score.
 7. Top ~5 finalists, each: **trader-exit** `exit.py plan --symbol SYM --entry <price>
-   --date <today> --time "9:45 AM" --stop pct:3 --target 2R --write`, then
-   **trader-timemachine** `timemachine.py run` (odds of hitting the -3% stop within one session,
+   --date <today> --time "9:45 AM" --stop pct:10 --target 2R --write`, then
+   **trader-timemachine** `timemachine.py run` (odds of hitting the -10% stop within one session,
    chance of being green at the close). If the session is open (after 9:45 ET),
    **trader-entry** `entry.py check SYM`: an opening-range breakout is a plus.
 8. Score each 1-10 from all of the above. Show **only the 8+ stocks** (rule 5; if none, the one
    highest-scored stock marked "under 8, not bought", rule 6) with reasons in a few plain
-   lines (Hebrew) and the stop: buy price and starting stop = buy price x 0.97
-   (e.g. "קנייה 100$ ← סטופ 97$"), which then trails 3% under the peak.
+   lines (Hebrew) and the stop: buy price and starting stop = buy price x 0.90
+   (e.g. "קנייה 100$ ← סטופ 90$"), which then trails 10% under the peak.
 9. Each 8+ stock, a second opinion before buying: **trader-budget** `size.py --write` and
    **trader-risk** `check.py` with `trader/config.json` set to the user's rules (budget = account
    value, max_position_pct 5, max_order_usd 5% of value, fractional true, no time windows) and
@@ -113,19 +116,19 @@ the day's volume is partial: run `scan.py daily --show 0 --min-volume 400000`. E
      yesterday's close (`marketdata.daily(SYM)[-2]` is yesterday's bar), P&L since the buy,
      peak and trailing stop, and any stop sale;
    - each 8+ stock: name, ticker, score, 2-3 reasons (naming the skills behind them), buy
-     price, starting stop = price x 0.97 (show the calculation), and that it was bought;
+     price, starting stop = price x 0.90 (show the calculation), and that it was bought;
    - which skills ran and which could not (one line);
    - or, if nothing reached 8: say so, then the one highest-scored stock with its score,
-     reasons, price and would-be stop (price x 0.97), marked "under 8, not bought";
+     reasons, price and would-be stop (price x 0.90), marked "under 8, not bought";
    - any stop-loss sales since the last run;
    - the account: total value, cash, P&L, open positions with their peak and current
-     trailing stop (peak x 0.97).
+     trailing stop (peak x 0.90).
 
 ## Daily close summary (scheduled task, US trading days, after the 16:00 ET close)
 
 No scanning and no buying. Run `account.py check` (applies the trailing stop to the whole
 day's bars), then `account.py report`, commit and push `paper-bot/account/`, and send ONE short
-message in Hebrew: for every open stock, the buy price, the current trailing stop (peak x 0.97,
+message in Hebrew: for every open stock, the buy price, the current trailing stop (peak x 0.90,
 show the peak), and its profit/loss in $ and %; every stock sold (today or before) with its
 buy price, sale price and profit/loss; and the account total (value, cash, total P&L).
 On a day the NYSE was closed, one line saying so plus the account total.
